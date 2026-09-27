@@ -1,7 +1,7 @@
 """住房贷款纾困申请与履约跟踪领域规则与状态转换。"""
 from typing import Any, Dict, Iterable, Tuple
 
-from .domain import Actor, Conflict, ValidationError, boolean, choice, integer, number, text, text_list
+from .domain import Actor, Conflict, ValidationError, boolean, choice, integer, number, optional_number, text, text_list
 
 
 INITIAL_STATE = "submitted"
@@ -34,6 +34,8 @@ class DomainRules:
         number(p, "hardship_factor", 0, 1)
         choice(p, "program_type", ["deferral", "reduction", "restructure"])
         integer(p, "requested_months", 1, 24)
+        if optional_number(p, "principal_outstanding", 0) is None:
+            p.pop("principal_outstanding", None)
         if p["monthly_expenses"] >= income:
             raise ValidationError("支出不能达到或超过收入")
         return p

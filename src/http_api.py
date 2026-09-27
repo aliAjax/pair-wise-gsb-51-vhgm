@@ -12,6 +12,10 @@ from .domain import Actor, DomainError, PermissionDenied, ValidationError
 RECORD_RE = re.compile(r"^/api/records/(\d+)$")
 ACTION_RE = re.compile(r"^/api/records/(\d+)/actions/([a-z_]+)$")
 AUDIT_RE = re.compile(r"^/api/records/(\d+)/audit$")
+LEDGER_RE = re.compile(r"^/api/records/(\d+)/ledger$")
+LEDGER_ENTRIES_RE = re.compile(r"^/api/records/(\d+)/ledger/entries$")
+LEDGER_DEDUCTIONS_RE = re.compile(r"^/api/records/(\d+)/ledger/deductions$")
+LEDGER_DECISION_RE = re.compile(r"^/api/records/(\d+)/ledger/deductions/(\d+)/(confirm|reject)$")
 
 
 def make_handler(service: Any, static_dir: Path):
@@ -84,6 +88,10 @@ def make_handler(service: Any, static_dir: Path):
                 if match:
                     self._send(200, {"items": service.timeline(self._actor(), int(match.group(1)))})
                     return
+                match = LEDGER_RE.match(parsed.path)
+                if match:
+                    self._send(200, service.ledger_detail(self._actor(), int(match.group(1))))
+                    return
                 if parsed.path == "/api/stats":
                     self._send(200, service.stats(self._actor()))
                     return
@@ -106,6 +114,23 @@ def make_handler(service: Any, static_dir: Path):
                         raise ValidationError("expected_version必须是整数")
                     record = service.act(self._actor(), int(match.group(1)), version, match.group(2), body.get("data", {}))
                     self._send(200, record)
+                    return
+                match = LEDGER_ENTRIES_RE.match(parsed.path)
+                if match:
+                    self._send(201, service.register_entry(self._actor(), int(match.group(1)), body))
+                    return
+                match = LEDGER_DEDUCTIONS_RE.match(parsed.path)
+                if match:
+                    self._send(201, service.initiate_deduction(self._actor(), int(match.group(1)), body))
+                    return
+                match = LEDGER_DECISION_RE.match(parsed.path)
+                if match:
+                    record_id = int(match.group(1))
+                    deduction_id = int(match.group(2))
+                    if match.group(3) == "confirm":
+                        self._send(200, service.confirm_deduction(self._actor(), record_id, deduction_id))
+                    else:
+                        self._send(200, service.reject_deduction(self._actor(), record_id, deduction_id, body))
                     return
                 self._send(404, {"error": "not_found", "message": "路径不存在"})
             except Exception as exc:
